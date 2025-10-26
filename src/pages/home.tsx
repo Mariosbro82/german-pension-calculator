@@ -31,6 +31,9 @@ import { Link, useLocation, useSearch } from "wouter";
 // import { generatePensionPDF } from "@/services/pdf-generator";
 import { useOnboardingStore } from "@/stores/onboardingStore";
 import { useAutoSave } from "@/hooks/useAutoSave";
+import { FlexiblePayoutSimulator } from "@/components/FlexiblePayoutSimulator";
+import { FundSavingsPlanComparison } from "@/components/FundSavingsPlanComparison";
+import { AllPensionComparison } from "@/components/AllPensionComparison";
 
 const formSchema = z.object({
   currentAge: z.number().min(18).max(80),
@@ -107,6 +110,11 @@ function Home({ initialTab = "private-pension" }: HomeProps = {}) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [focusedField, setFocusedField] = useState<string | null>(null);
+
+  // Modal states for disconnected components
+  const [showFlexiblePayoutSimulator, setShowFlexiblePayoutSimulator] = useState(false);
+  const [showFundComparison, setShowFundComparison] = useState(false);
+  const [showAllPensionComparison, setShowAllPensionComparison] = useState(false);
 
   // Enhanced UI hooks
   const {
@@ -1922,6 +1930,26 @@ function Home({ initialTab = "private-pension" }: HomeProps = {}) {
                       </div>
                     </div>
                   </div>
+
+                  {/* Action Buttons for Advanced Features */}
+                  <div className="flex flex-wrap gap-4 mt-6">
+                    <Button
+                      onClick={() => setShowFlexiblePayoutSimulator(true)}
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <TrendingUp className="h-4 w-4" />
+                      {language === 'de' ? 'Flexible Auszahlungsplanung' : 'Flexible Payout Planning'}
+                    </Button>
+                    <Button
+                      onClick={() => setShowAllPensionComparison(true)}
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      {language === 'de' ? 'Alle Rentenströme vergleichen' : 'Compare All Pension Streams'}
+                    </Button>
+                  </div>
                 </section>
 
                 {/* Premium Chart Analytics */}
@@ -3007,6 +3035,19 @@ function Home({ initialTab = "private-pension" }: HomeProps = {}) {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Action Button for Fund Comparison */}
+                  <div className="mt-8">
+                    <Button
+                      onClick={() => setShowFundComparison(true)}
+                      variant="outline"
+                      size="lg"
+                      className="w-full flex items-center justify-center gap-2"
+                    >
+                      <Shield className="h-5 w-5" />
+                      {language === 'de' ? 'Fondsparplan mit Versicherung vergleichen' : 'Compare Fund with Insurance Wrapper'}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -4309,6 +4350,46 @@ function Home({ initialTab = "private-pension" }: HomeProps = {}) {
           </div>
         )}
       </main>
+
+      {/* Modal Components */}
+      {showFlexiblePayoutSimulator && simulationResults && (
+        <FlexiblePayoutSimulator
+          isOpen={showFlexiblePayoutSimulator}
+          onClose={() => setShowFlexiblePayoutSimulator(false)}
+          portfolioValue={simulationResults.kpis.projectedValue}
+          currentAge={formData.currentAge}
+          payoutStartAge={formData.payoutStartAge}
+          payoutEndAge={formData.payoutEndAge}
+          language={language}
+        />
+      )}
+
+      {showFundComparison && (
+        <FundSavingsPlanComparison
+          isOpen={showFundComparison}
+          onClose={() => setShowFundComparison(false)}
+          monthlyContribution={fundsSettings.monthlyContribution}
+          currentAge={onboardingData.personal?.age || 30}
+          retirementAge={67}
+          language={language}
+        />
+      )}
+
+      {showAllPensionComparison && (
+        <AllPensionComparison
+          language={language}
+          currentAge={onboardingData.personal?.age || 30}
+          netMonthlyIncome={(() => {
+            const income = onboardingData.income || {};
+            const isMarriedBoth = onboardingData.personal?.maritalStatus === 'verheiratet' && onboardingData.personal?.calcScope === 'beide_personen';
+            return isMarriedBoth
+              ? (income.netMonthly_A || 0) + (income.netMonthly_B || 0)
+              : income.netMonthly || 0;
+          })()}
+          retirementAge={67}
+          privatePensionMonthly={simulationResults?.kpis.monthlyPension || 0}
+        />
+      )}
 
       {/* Bottom Safe Area */}
       <div className="h-safe-area-inset-bottom bg-background"></div>

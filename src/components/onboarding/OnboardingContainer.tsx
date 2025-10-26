@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { OnboardingStorageService } from '../../services/onboardingStorage';
 import OnboardingWizard from './OnboardingWizard';
-import { Loader2 } from 'lucide-react';
+import { Loader2, PartyPopper } from 'lucide-react';
+import { useLocation } from 'wouter';
 
 interface OnboardingContainerProps {
   children: React.ReactNode;
@@ -13,6 +14,8 @@ const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ children }) =
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [, setLocation] = useLocation();
 
   useEffect(() => {
     let isMounted = true;
@@ -72,10 +75,22 @@ const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ children }) =
 
   // React to onboarding completion changes (when wizard completes during session)
   useEffect(() => {
-    if (isCompleted) {
+    if (isCompleted && showOnboarding) {
+      // User just completed onboarding
       setShowOnboarding(false);
+      setShowWelcome(true);
+
+      // Redirect to dashboard after a short delay
+      setTimeout(() => {
+        setLocation('/');
+      }, 500);
+
+      // Hide welcome message after 5 seconds
+      setTimeout(() => {
+        setShowWelcome(false);
+      }, 5000);
     }
-  }, [isCompleted]);
+  }, [isCompleted, showOnboarding, setLocation]);
 
   // Skip onboarding function for debugging
   const handleSkipOnboarding = () => {
@@ -144,6 +159,45 @@ const OnboardingContainer: React.FC<OnboardingContainerProps> = ({ children }) =
   return (
     <div className="min-h-screen">
       {children}
+
+      {/* Welcome Message after Onboarding Completion */}
+      {showWelcome && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 animate-in zoom-in duration-300">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <PartyPopper className="h-8 w-8 text-green-600" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Willkommen!
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Ihre Daten wurden erfolgreich gespeichert. Sie werden nun zu Ihrem Dashboard weitergeleitet, wo Sie alle Funktionen nutzen können.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    setShowWelcome(false);
+                    setLocation('/');
+                  }}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Zum Dashboard
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWelcome(false);
+                    setLocation('/calculator');
+                  }}
+                  className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  Zum Rechner
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -18,6 +18,7 @@ import {
   PieChart,
   Home,
   DollarSign,
+  HelpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +54,7 @@ export const Header: React.FC<HeaderProps> = ({ language = 'de', onLanguageChang
       comparison: 'Vergleich',
       funds: 'Fonds',
       taxCalculator: 'Steuerrechner',
+      questions: 'Fragen',
       menu: 'Menü',
       close: 'Schließen',
     },
@@ -62,6 +64,7 @@ export const Header: React.FC<HeaderProps> = ({ language = 'de', onLanguageChang
       comparison: 'Comparison',
       funds: 'Funds',
       taxCalculator: 'Tax Calculator',
+      questions: 'Questions',
       menu: 'Menu',
       close: 'Close',
     },
@@ -94,6 +97,11 @@ export const Header: React.FC<HeaderProps> = ({ language = 'de', onLanguageChang
       name: t.taxCalculator,
       href: '/tax-calculator',
       icon: DollarSign,
+    },
+    {
+      name: t.questions,
+      href: '/questions',
+      icon: HelpCircle,
     },
   ];
 
