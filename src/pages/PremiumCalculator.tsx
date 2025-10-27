@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation } from 'wouter';
 import {
   Calculator,
   TrendingUp,
@@ -11,7 +12,11 @@ import {
   Download,
   Share2,
   Sparkles,
+  AlertCircle,
+  Shield,
 } from 'lucide-react';
+import { downloadChartAsPNG, downloadDataAsCSV, shareContent } from '@/lib/export-utils';
+import { useToast } from '@/hooks/use-toast';
 import {
   Card,
   CardContent,
@@ -65,6 +70,8 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
   const [activeTab, setActiveTab] = useState('private-pension');
   const [isCalculating, setIsCalculating] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [location] = useLocation();
+  const { toast } = useToast();
 
   const [inputs, setInputs] = useState<CalculatorInputs>({
     currentAge: 35,
@@ -74,6 +81,24 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
     expectedReturn: 6,
     inflationRate: 2,
   });
+
+  // Parse URL params to pre-select product
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const product = params.get('product');
+    if (product) {
+      const tabMap: Record<string, string> = {
+        'riester': 'riester',
+        'ruerup': 'ruerup',
+        'private': 'private-pension',
+        'occupational': 'occupational',
+      };
+      const tab = tabMap[product];
+      if (tab) {
+        setActiveTab(tab);
+      }
+    }
+  }, [location]);
 
   const texts = {
     de: {
@@ -104,6 +129,7 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
       chartTitle: 'Vermögensentwicklung',
       contributions: 'Einzahlungen',
       growth: 'Wachstum',
+      assumptions: 'Annahmen & Methodik',
     },
     en: {
       title: 'Pension Calculator',
@@ -133,6 +159,7 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
       chartTitle: 'Wealth Development',
       contributions: 'Contributions',
       growth: 'Growth',
+      assumptions: 'Assumptions & Methodology',
     },
   };
 
@@ -171,6 +198,76 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
   const totalContributions = chartData[chartData.length - 1]?.contributions || 0;
   const totalReturns = chartData[chartData.length - 1]?.returns || 0;
   const monthlyPension = Math.round((finalCapital * 0.04) / 12);
+
+  const handleDownloadChart = async () => {
+    try {
+      await downloadChartAsPNG('calculator-chart', 'rentenrechner');
+      toast({
+        title: language === 'de' ? 'Erfolgreich' : 'Success',
+        description: language === 'de' ? 'Chart heruntergeladen' : 'Chart downloaded',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'de' ? 'Fehler' : 'Error',
+        description: language === 'de'
+          ? 'Chart konnte nicht heruntergeladen werden'
+          : 'Failed to download chart',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDownloadResults = () => {
+    try {
+      const exportData = chartData.map(item => ({
+        [language === 'de' ? 'Jahr' : 'Year']: item.year,
+        [language === 'de' ? 'Kapital' : 'Capital']: item.capital,
+        [language === 'de' ? 'Einzahlungen' : 'Contributions']: item.contributions,
+        [language === 'de' ? 'Erträge' : 'Returns']: item.returns,
+      }));
+
+      downloadDataAsCSV(exportData, 'rentenrechner-ergebnisse');
+      toast({
+        title: language === 'de' ? 'Erfolgreich' : 'Success',
+        description: language === 'de' ? 'Ergebnisse heruntergeladen' : 'Results downloaded',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'de' ? 'Fehler' : 'Error',
+        description: language === 'de'
+          ? 'Ergebnisse konnten nicht heruntergeladen werden'
+          : 'Failed to download results',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const shared = await shareContent(
+        language === 'de' ? 'Meine Rentenprognose' : 'My Pension Projection',
+        language === 'de'
+          ? `Meine prognostizierte Rente: €${monthlyPension.toLocaleString('de-DE')}/Monat bei €${finalCapital.toLocaleString('de-DE')} Endkapital`
+          : `My projected pension: €${monthlyPension.toLocaleString('en-US')}/month with €${finalCapital.toLocaleString('en-US')} final capital`,
+        window.location.href
+      );
+
+      toast({
+        title: language === 'de' ? 'Erfolgreich' : 'Success',
+        description: shared
+          ? language === 'de' ? 'Prognose geteilt' : 'Projection shared'
+          : language === 'de' ? 'Link kopiert' : 'Link copied',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'de' ? 'Fehler' : 'Error',
+        description: language === 'de'
+          ? 'Teilen fehlgeschlagen'
+          : 'Failed to share',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const InputField = ({
     label,
@@ -444,11 +541,21 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
                     <div className="flex items-center justify-between mb-6">
                       <h2 className="text-2xl font-bold">{t.results}</h2>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="btn-premium-ghost">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="btn-premium-ghost"
+                          onClick={handleDownloadResults}
+                        >
                           <Download className="h-4 w-4 mr-2" />
                           {t.download}
                         </Button>
-                        <Button variant="outline" size="sm" className="btn-premium-ghost">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="btn-premium-ghost"
+                          onClick={handleShare}
+                        >
                           <Share2 className="h-4 w-4 mr-2" />
                           {t.share}
                         </Button>
@@ -489,13 +596,27 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
                   {/* Chart */}
                   <Card className="chart-container-premium">
                     <CardHeader>
-                      <CardTitle>{t.chartTitle}</CardTitle>
-                      <CardDescription>
-                        {language === 'de' ? 'Entwicklung über die Jahre' : 'Development over the years'}
-                      </CardDescription>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>{t.chartTitle}</CardTitle>
+                          <CardDescription>
+                            {language === 'de' ? 'Entwicklung über die Jahre' : 'Development over the years'}
+                          </CardDescription>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="btn-premium-ghost"
+                          onClick={handleDownloadChart}
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Chart
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent>
-                      <ResponsiveContainer width="100%" height={400}>
+                      <div id="calculator-chart">
+                        <ResponsiveContainer width="100%" height={400}>
                         <AreaChart data={chartData}>
                           <defs>
                             <linearGradient id="colorCapital" x1="0" y1="0" x2="0" y2="1">
@@ -549,6 +670,41 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
                           />
                         </AreaChart>
                       </ResponsiveContainer>
+                      </div>
+
+                      {/* Assumptions & Methodology */}
+                      <div className="mt-6 p-4 bg-muted/30 rounded-lg space-y-3">
+                        <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                          <Info className="h-4 w-4" />
+                          {t.assumptions}
+                        </h4>
+                        <div className="text-xs text-muted-foreground space-y-2">
+                          <div>
+                            <strong>{language === 'de' ? 'Berechnungsmethode:' : 'Calculation Method:'}</strong>
+                            <ul className="list-disc list-inside mt-1 space-y-1">
+                              <li>{language === 'de' ? 'Monatliche Iteration (nicht jährlich)' : 'Monthly iteration (not annual)'}</li>
+                              <li>{language === 'de' ? 'Zinseszins mit monatlicher Verzinsung' : 'Compound interest with monthly returns'}</li>
+                              <li>{language === 'de' ? 'Annahme: 4% sichere Entnahmerate für Rentenzahlung' : 'Assumption: 4% safe withdrawal rate for pension'}</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <strong>{language === 'de' ? 'Produktspezifische Details:' : 'Product-Specific Details:'}</strong>
+                            <ul className="list-disc list-inside mt-1 space-y-1">
+                              <li><strong>{t.privatePension}:</strong> {language === 'de' ? 'Volle Flexibilität, Kapitalertragssteuer 25%' : 'Full flexibility, 25% capital gains tax'}</li>
+                              <li><strong>{t.riester}:</strong> {language === 'de' ? 'Staatliche Zulagen (175€ + 300€/Kind), Beitragsgarantie' : 'State subsidies (175€ + 300€/child), contribution guarantee'}</li>
+                              <li><strong>{t.ruerup}:</strong> {language === 'de' ? 'Steuerersparnis bis 27.566€ (96% absetzbar 2024)' : 'Tax savings up to 27,566€ (96% deductible 2024)'}</li>
+                              <li><strong>{t.occupational}:</strong> {language === 'de' ? 'Arbeitgeberzuschuss, Sozialabgabenfrei bis 584€/Monat' : 'Employer contribution, social security exempt up to 584€/month'}</li>
+                            </ul>
+                          </div>
+                          <div className="pt-2 border-t border-border/50">
+                            <p className="italic">
+                              {language === 'de'
+                                ? 'Hinweis: Dies ist eine vereinfachte Modellrechnung. Für eine detaillierte Beratung wenden Sie sich bitte an einen Finanzberater.'
+                                : 'Note: This is a simplified model calculation. For detailed advice, please consult a financial advisor.'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </motion.div>
