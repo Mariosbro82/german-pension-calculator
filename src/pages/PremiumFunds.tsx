@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp,
   TrendingDown,
@@ -12,7 +12,13 @@ import {
   Filter,
   Search,
   Download,
+  X,
+  AlertCircle,
+  Shield,
+  Calendar,
 } from 'lucide-react';
+import { downloadChartAsPNG, downloadDataAsCSV } from '@/lib/export-utils';
+import { useToast } from '@/hooks/use-toast';
 import {
   Card,
   CardContent,
@@ -30,6 +36,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import {
   LineChart,
@@ -66,6 +79,8 @@ export const PremiumFunds: React.FC<PremiumFundsProps> = ({ language = 'de' }) =
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedFund, setSelectedFund] = useState<Fund | null>(null);
+  const [showFundDetail, setShowFundDetail] = useState(false);
+  const { toast } = useToast();
 
   const texts = {
     de: {
@@ -224,11 +239,65 @@ export const PremiumFunds: React.FC<PremiumFundsProps> = ({ language = 'de' }) =
     }
   };
 
+  const handleDownloadChart = async () => {
+    try {
+      await downloadChartAsPNG('fund-performance-chart', 'fondsanalyse');
+      toast({
+        title: language === 'de' ? 'Erfolgreich' : 'Success',
+        description: language === 'de' ? 'Chart heruntergeladen' : 'Chart downloaded',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'de' ? 'Fehler' : 'Error',
+        description: language === 'de'
+          ? 'Chart konnte nicht heruntergeladen werden'
+          : 'Failed to download chart',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDownloadFundData = () => {
+    try {
+      const exportData = filteredFunds.map(fund => ({
+        [language === 'de' ? 'Name' : 'Name']: fund.name,
+        'ISIN': fund.isin,
+        [language === 'de' ? 'Kategorie' : 'Category']: fund.category,
+        [language === 'de' ? '1J Rendite' : '1Y Return']: `${fund.return1y}%`,
+        [language === 'de' ? '3J Rendite' : '3Y Return']: `${fund.return3y}%`,
+        [language === 'de' ? '5J Rendite' : '5Y Return']: `${fund.return5y}%`,
+        'TER': `${fund.ter}%`,
+        [language === 'de' ? 'Volumen' : 'Volume']: fund.volume,
+        'Rating': fund.rating,
+        [language === 'de' ? 'Risiko' : 'Risk']: getRiskText(fund.risk),
+      }));
+
+      downloadDataAsCSV(exportData, 'fondsanalyse-daten');
+      toast({
+        title: language === 'de' ? 'Erfolgreich' : 'Success',
+        description: language === 'de' ? 'Fondsdaten heruntergeladen' : 'Fund data downloaded',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'de' ? 'Fehler' : 'Error',
+        description: language === 'de'
+          ? 'Daten konnten nicht heruntergeladen werden'
+          : 'Failed to download data',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openFundDetail = (fund: Fund) => {
+    setSelectedFund(fund);
+    setShowFundDetail(true);
+  };
+
   const FundCard = ({ fund }: { fund: Fund }) => (
     <motion.div
       whileHover={{ y: -4, scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
-      onClick={() => setSelectedFund(fund)}
+      onClick={() => openFundDetail(fund)}
     >
       <Card className="premium-card cursor-pointer h-full">
         <CardHeader className="pb-3">
@@ -298,7 +367,15 @@ export const PremiumFunds: React.FC<PremiumFundsProps> = ({ language = 'de' }) =
             </Badge>
           </div>
 
-          <Button variant="outline" size="sm" className="w-full btn-premium-ghost">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full btn-premium-ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              openFundDetail(fund);
+            }}
+          >
             {t.details}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
@@ -393,17 +470,23 @@ export const PremiumFunds: React.FC<PremiumFundsProps> = ({ language = 'de' }) =
                 <div>
                   <CardTitle>{t.marketOverview}</CardTitle>
                   <CardDescription>
-                    {language === 'de' ? 'Performance-Entwicklung nach Kategorie' : 'Performance by category'}
+                    {language === 'de' ? 'Performance-Entwicklung nach Kategorie (indexiert auf 100)' : 'Performance by category (indexed to 100)'}
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" className="btn-premium-ghost">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="btn-premium-ghost"
+                  onClick={handleDownloadChart}
+                >
                   <Download className="mr-2 h-4 w-4" />
                   {t.download}
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={350}>
+              <div id="fund-performance-chart">
+                <ResponsiveContainer width="100%" height={350}>
                 <LineChart data={performanceData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
                   <XAxis
@@ -432,6 +515,55 @@ export const PremiumFunds: React.FC<PremiumFundsProps> = ({ language = 'de' }) =
                   <Line type="monotone" dataKey="realEstate" stroke="hsl(var(--chart-4))" strokeWidth={3} name={t.realEstate} />
                 </LineChart>
               </ResponsiveContainer>
+              </div>
+
+              {/* Data Source & Disclaimer */}
+              <div className="mt-6 p-4 bg-muted/30 rounded-lg space-y-3">
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    {language === 'de' ? 'Datenquelle & Stand' : 'Data Source & As-of Date'}
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'de'
+                      ? 'Historische Performance-Daten von Morningstar, BVI und Fondsdatenbanken. Stand: Dezember 2024. Alle Renditen verstehen sich nach Kosten (inkl. TER).'
+                      : 'Historical performance data from Morningstar, BVI and fund databases. As of: December 2024. All returns are net of costs (incl. TER).'}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    {language === 'de' ? 'Risikobewertung' : 'Risk Rating'}
+                  </h4>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    <li><strong>{t.riskLow}:</strong> {language === 'de' ? 'Geringe Schwankungen, typisch für Anleihen und Geldmarktfonds' : 'Low volatility, typical for bonds and money market funds'}</li>
+                    <li><strong>{t.riskMedium}:</strong> {language === 'de' ? 'Moderate Schwankungen, typisch für Mischfonds' : 'Moderate volatility, typical for mixed funds'}</li>
+                    <li><strong>{t.riskHigh}:</strong> {language === 'de' ? 'Hohe Schwankungen, typisch für Aktienfonds' : 'High volatility, typical for equity funds'}</li>
+                  </ul>
+                </div>
+
+                <div className="pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground italic">
+                    {language === 'de'
+                      ? 'Hinweis: Historische Wertentwicklungen sind keine Garantie für zukünftige Ergebnisse. Es handelt sich nicht um eine Anlageempfehlung.'
+                      : 'Note: Past performance is not a guarantee of future results. This is not investment advice.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Download Fund Data */}
+              <div className="mt-4 flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="btn-premium-ghost"
+                  onClick={handleDownloadFundData}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {language === 'de' ? 'Fondsdaten als CSV' : 'Fund data as CSV'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -477,6 +609,142 @@ export const PremiumFunds: React.FC<PremiumFundsProps> = ({ language = 'de' }) =
           )}
         </motion.div>
       </div>
+
+      {/* Fund Detail Modal */}
+      <Dialog open={showFundDetail} onOpenChange={setShowFundDetail}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {selectedFund && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl flex items-center gap-2">
+                  {selectedFund.name}
+                  <div className="flex items-center gap-1">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        className={cn(
+                          "h-4 w-4",
+                          i < selectedFund.rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                        )}
+                      />
+                    ))}
+                  </div>
+                </DialogTitle>
+                <DialogDescription className="font-mono text-sm">
+                  ISIN: {selectedFund.isin}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6 mt-4">
+                {/* Performance Overview */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    {language === 'de' ? 'Performance-Übersicht' : 'Performance Overview'}
+                  </h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <Card>
+                      <CardContent className="p-4">
+                        <p className="text-sm text-muted-foreground mb-1">{t.return1y}</p>
+                        <p className={cn(
+                          "text-2xl font-bold",
+                          selectedFund.return1y > 0 ? "text-success" : "text-destructive"
+                        )}>
+                          {selectedFund.return1y > 0 ? '+' : ''}{selectedFund.return1y}%
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <p className="text-sm text-muted-foreground mb-1">{t.return3y}</p>
+                        <p className={cn(
+                          "text-2xl font-bold",
+                          selectedFund.return3y > 0 ? "text-success" : "text-destructive"
+                        )}>
+                          {selectedFund.return3y > 0 ? '+' : ''}{selectedFund.return3y}%
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <p className="text-sm text-muted-foreground mb-1">{t.return5y}</p>
+                        <p className={cn(
+                          "text-2xl font-bold",
+                          selectedFund.return5y > 0 ? "text-success" : "text-destructive"
+                        )}>
+                          {selectedFund.return5y > 0 ? '+' : ''}{selectedFund.return5y}%
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                {/* Fund Details */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Info className="h-5 w-5 text-primary" />
+                    {language === 'de' ? 'Fondsdetails' : 'Fund Details'}
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t.category}</p>
+                        <p className="font-semibold capitalize">{selectedFund.category}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t.volume}</p>
+                        <p className="font-semibold">{selectedFund.volume}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t.ter} (Kosten)</p>
+                        <p className="font-semibold">{selectedFund.ter}% p.a.</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t.risk}</p>
+                        <Badge className={cn("badge-premium bg-gradient-to-r", getRiskColor(selectedFund.risk))}>
+                          {getRiskText(selectedFund.risk)}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Risk & Investment Info */}
+                <div className="p-4 bg-muted/30 rounded-lg space-y-2">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    {language === 'de' ? 'Wichtige Hinweise' : 'Important Information'}
+                  </h4>
+                  <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• {language === 'de' ? 'Historische Wertentwicklung ist keine Garantie für zukünftige Ergebnisse' : 'Past performance is no guarantee of future results'}</li>
+                    <li>• {language === 'de' ? 'Alle Renditeangaben nach Kosten (inkl. TER)' : 'All returns are net of costs (incl. TER)'}</li>
+                    <li>• {language === 'de' ? 'Dies ist keine Anlageempfehlung' : 'This is not investment advice'}</li>
+                    <li>• {language === 'de' ? 'Datenstand: Dezember 2024 (Quelle: Morningstar, BVI)' : 'Data as of: December 2024 (Source: Morningstar, BVI)'}</li>
+                  </ul>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <Button className="flex-1 btn-premium-primary" disabled>
+                    {language === 'de' ? 'Zum Anbieter' : 'Go to Provider'}
+                  </Button>
+                  <Button variant="outline" className="flex-1" disabled>
+                    {language === 'de' ? 'Factsheet herunterladen' : 'Download Factsheet'}
+                  </Button>
+                </div>
+
+                <p className="text-xs text-muted-foreground text-center italic">
+                  {language === 'de'
+                    ? 'Hinweis: Externe Links zu Anbietern sind in dieser Demo deaktiviert.'
+                    : 'Note: External links to providers are disabled in this demo.'}
+                </p>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

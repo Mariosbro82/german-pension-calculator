@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'wouter';
 import { motion } from 'framer-motion';
 import {
   BarChart3,
@@ -13,7 +14,10 @@ import {
   DollarSign,
   Shield,
   Clock,
+  Undo2,
 } from 'lucide-react';
+import { downloadChartAsPNG, downloadDataAsCSV, shareContent } from '@/lib/export-utils';
+import { useToast } from '@/hooks/use-toast';
 import {
   Card,
   CardContent,
@@ -68,6 +72,8 @@ interface Product {
 
 export const PremiumComparison: React.FC<PremiumComparisonProps> = ({ language = 'de' }) => {
   const [selectedProducts, setSelectedProducts] = useState<string[]>(['riester', 'ruerup', 'private']);
+  const [removedProduct, setRemovedProduct] = useState<{ id: string; index: number } | null>(null);
+  const { toast } = useToast();
 
   const texts = {
     de: {
@@ -271,7 +277,112 @@ export const PremiumComparison: React.FC<PremiumComparisonProps> = ({ language =
 
   const removeProduct = (productId: string) => {
     if (selectedProducts.length > 1) {
+      const index = selectedProducts.indexOf(productId);
+      setRemovedProduct({ id: productId, index });
       setSelectedProducts(selectedProducts.filter((id) => id !== productId));
+
+      // Show undo toast
+      toast({
+        title: language === 'de' ? 'Produkt entfernt' : 'Product removed',
+        description: language === 'de'
+          ? `${products[productId].name} wurde entfernt. Rückgängig machen?`
+          : `${products[productId].name} was removed. Undo?`,
+        action: (
+          <button
+            onClick={undoRemoveProduct}
+            className="inline-flex items-center gap-1 px-3 py-1 text-sm font-medium text-primary hover:text-primary/80"
+          >
+            <Undo2 className="h-3 w-3" />
+            {language === 'de' ? 'Rückgängig' : 'Undo'}
+          </button>
+        ),
+      });
+    }
+  };
+
+  const undoRemoveProduct = () => {
+    if (removedProduct) {
+      const newProducts = [...selectedProducts];
+      newProducts.splice(removedProduct.index, 0, removedProduct.id);
+      setSelectedProducts(newProducts);
+      setRemovedProduct(null);
+      toast({
+        title: language === 'de' ? 'Wiederhergestellt' : 'Restored',
+        description: language === 'de'
+          ? 'Produkt wurde wiederhergestellt'
+          : 'Product was restored',
+      });
+    }
+  };
+
+  const handleDownloadChart = async () => {
+    try {
+      await downloadChartAsPNG('comparison-radar-chart', 'produktvergleich');
+      toast({
+        title: language === 'de' ? 'Erfolgreich' : 'Success',
+        description: language === 'de' ? 'Chart heruntergeladen' : 'Chart downloaded',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'de' ? 'Fehler' : 'Error',
+        description: language === 'de'
+          ? 'Chart konnte nicht heruntergeladen werden'
+          : 'Failed to download chart',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDownloadData = () => {
+    try {
+      const exportData = radarData.map(item => ({
+        [language === 'de' ? 'Kriterium' : 'Criterion']: item.metric,
+        ...Object.fromEntries(
+          selectedProducts.map(id => [products[id].name, item[id] || 0])
+        ),
+      }));
+
+      downloadDataAsCSV(exportData, 'produktvergleich-daten');
+      toast({
+        title: language === 'de' ? 'Erfolgreich' : 'Success',
+        description: language === 'de' ? 'Daten heruntergeladen' : 'Data downloaded',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'de' ? 'Fehler' : 'Error',
+        description: language === 'de'
+          ? 'Daten konnten nicht heruntergeladen werden'
+          : 'Failed to download data',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const productNames = selectedProducts.map(id => products[id].name).join(', ');
+      const shared = await shareContent(
+        language === 'de' ? 'Produktvergleich' : 'Product Comparison',
+        language === 'de'
+          ? `Mein Altersvorsorge-Vergleich: ${productNames}`
+          : `My pension product comparison: ${productNames}`,
+        window.location.href
+      );
+
+      toast({
+        title: language === 'de' ? 'Erfolgreich' : 'Success',
+        description: shared
+          ? language === 'de' ? 'Vergleich geteilt' : 'Comparison shared'
+          : language === 'de' ? 'Link kopiert' : 'Link copied',
+      });
+    } catch (error) {
+      toast({
+        title: language === 'de' ? 'Fehler' : 'Error',
+        description: language === 'de'
+          ? 'Teilen fehlgeschlagen'
+          : 'Failed to share',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -359,15 +470,25 @@ export const PremiumComparison: React.FC<PremiumComparisonProps> = ({ language =
                 <div>
                   <CardTitle>{t.scoreCard}</CardTitle>
                   <CardDescription>
-                    {language === 'de' ? 'Bewertung nach Kriterien' : 'Rating by criteria'}
+                    {language === 'de' ? 'Bewertung nach Kriterien (0-10 Punkte)' : 'Rating by criteria (0-10 points)'}
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="btn-premium-ghost">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="btn-premium-ghost"
+                    onClick={handleDownloadChart}
+                  >
                     <Download className="mr-2 h-4 w-4" />
                     {t.download}
                   </Button>
-                  <Button variant="outline" size="sm" className="btn-premium-ghost">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="btn-premium-ghost"
+                    onClick={handleShare}
+                  >
                     <Share2 className="mr-2 h-4 w-4" />
                     {t.share}
                   </Button>
@@ -375,7 +496,8 @@ export const PremiumComparison: React.FC<PremiumComparisonProps> = ({ language =
               </div>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
+              <div id="comparison-radar-chart">
+                <ResponsiveContainer width="100%" height={400}>
                 <RadarChart data={radarData}>
                   <PolarGrid stroke="hsl(var(--border))" />
                   <PolarAngleAxis dataKey="metric" style={{ fontSize: '12px' }} />
@@ -394,6 +516,57 @@ export const PremiumComparison: React.FC<PremiumComparisonProps> = ({ language =
                   <Legend />
                 </RadarChart>
               </ResponsiveContainer>
+              </div>
+
+              {/* Data Table */}
+              <div className="mt-6 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left p-2 font-semibold">{language === 'de' ? 'Kriterium' : 'Criterion'}</th>
+                      {selectedProducts.map(id => (
+                        <th key={id} className="text-center p-2 font-semibold">{products[id].name}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {radarData.map((row, idx) => (
+                      <tr key={idx} className="border-b border-border/50">
+                        <td className="p-2 text-muted-foreground">{row.metric}</td>
+                        {selectedProducts.map(id => (
+                          <td key={id} className="text-center p-2 font-medium">
+                            {row[id] || 0}/10
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="btn-premium-ghost"
+                    onClick={handleDownloadData}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    {language === 'de' ? 'Daten als CSV' : 'Data as CSV'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Data Source & Methodology */}
+              <div className="mt-6 p-4 bg-muted/30 rounded-lg">
+                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  {language === 'de' ? 'Datenquellen & Methodik' : 'Data Sources & Methodology'}
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {language === 'de'
+                    ? 'Die Bewertungen basieren auf gesetzlichen Rahmenbedingungen (EStG §10a, §82), durchschnittlichen Marktdaten und Expertenbewertungen. Renditen sind historische Durchschnittswerte (Quelle: BaFin, Stiftung Warentest 2024). Flexibilität, Garantie und Kosten werden auf einer Skala von 0-10 bewertet. Steuervorteile basieren auf einem durchschnittlichen Steuersatz von 35%.'
+                    : 'Ratings are based on legal frameworks (EStG §10a, §82), average market data, and expert assessments. Returns are historical averages (Source: BaFin, Stiftung Warentest 2024). Flexibility, guarantees, and costs are rated on a 0-10 scale. Tax benefits are based on an average tax rate of 35%.'}
+                </p>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -483,10 +656,12 @@ export const PremiumComparison: React.FC<PremiumComparisonProps> = ({ language =
                     </ul>
                   </div>
 
-                  <Button className="w-full btn-premium-primary">
-                    {language === 'de' ? 'Mehr erfahren' : 'Learn more'}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                  <Link href={`/calculator?product=${product.id}`}>
+                    <Button className="w-full btn-premium-primary">
+                      {language === 'de' ? 'Mehr erfahren' : 'Learn more'}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             </motion.div>
