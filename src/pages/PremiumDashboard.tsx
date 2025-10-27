@@ -255,12 +255,6 @@ export const PremiumDashboard: React.FC<PremiumDashboardProps> = ({ language = '
                             {kpi.change}
                           </div>
                         )}
-                        {kpi.trend === 'down' && (
-                          <div className="flex items-center gap-1 text-xs font-semibold text-destructive bg-destructive/10 px-2 py-1 rounded-full">
-                            <TrendingDown className="h-3 w-3" />
-                            {kpi.change}
-                          </div>
-                        )}
                       </div>
                       <div className="space-y-2">
                         <p className="text-sm font-medium text-muted-foreground">{kpi.label}</p>

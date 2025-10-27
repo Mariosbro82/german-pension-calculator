@@ -244,23 +244,23 @@ export const PremiumComparison: React.FC<PremiumComparisonProps> = ({ language =
     {
       metric: t.expectedReturn,
       ...Object.fromEntries(selectedProducts.map((id) => [id, products[id].expectedReturn])),
-    },
+    } as Record<string, string | number>,
     {
       metric: t.taxBenefit,
       ...Object.fromEntries(selectedProducts.map((id) => [id, products[id].taxBenefit])),
-    },
+    } as Record<string, string | number>,
     {
       metric: t.flexibility,
       ...Object.fromEntries(selectedProducts.map((id) => [id, products[id].flexibility])),
-    },
+    } as Record<string, string | number>,
     {
       metric: t.guarantee,
       ...Object.fromEntries(selectedProducts.map((id) => [id, products[id].guarantee])),
-    },
+    } as Record<string, string | number>,
     {
       metric: t.costs,
       ...Object.fromEntries(selectedProducts.map((id) => [id, 10 - products[id].costs])), // Inverted for better visualization
-    },
+    } as Record<string, string | number>,
   ];
 
   const comparisonData = selectedProducts.map((id) => ({

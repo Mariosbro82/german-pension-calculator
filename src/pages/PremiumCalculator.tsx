@@ -201,7 +201,12 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
 
   // Generate chart data
   const years = inputs.retirementAge - inputs.currentAge;
-  const chartData = [];
+  const chartData: Array<{
+    year: number;
+    capital: number;
+    contributions: number;
+    returns: number;
+  }> = [];
   let currentCapital = inputs.startCapital;
 
   for (let year = 0; year <= years; year++) {
