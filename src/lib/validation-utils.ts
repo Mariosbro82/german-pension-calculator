@@ -84,8 +84,8 @@ export const clampNumber = (value: number, min: number, max: number): number => 
 export const GERMAN_PENSION_LIMITS = {
   // Rürup-Rente (§10a EStG)
   RUERUP_MAX_ANNUAL: 27566, // Max deductible amount 2024
-  RUERUP_MAX_MONTHLY: Math.floor(27566 / 12), // ~2,297 EUR/month
-  RUERUP_DEDUCTIBLE_RATE: 0.96, // 96% deductible in 2024
+  RUERUP_MAX_MONTHLY: 27566 / 12, // ~2,297.17 €/month (informational)
+  RUERUP_DEDUCTIBLE_RATE: 1.0, // 100% deductible since 2023
 
   // Riester-Rente
   RIESTER_MIN_ANNUAL: 60, // Minimum contribution
@@ -96,8 +96,8 @@ export const GERMAN_PENSION_LIMITS = {
   RIESTER_CHILD_ALLOWANCE_OLD: 185, // Per child born before 2008
 
   // Betriebliche Altersvorsorge
-  OCCUPATIONAL_TAX_FREE_MONTHLY: 584, // Social security exempt 2024 (8% of BBG)
-  OCCUPATIONAL_TAX_FREE_ANNUAL: 7008, // 584 * 12
+  OCCUPATIONAL_TAX_FREE_MONTHLY: 604, // 8% of BBG West 2024
+  OCCUPATIONAL_TAX_FREE_ANNUAL: 7248, // 604 * 12
 
   // General limits
   MAX_AGE: 75,
