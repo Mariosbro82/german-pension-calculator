@@ -16,6 +16,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { downloadChartAsPNG, downloadDataAsCSV, shareContent } from '@/lib/export-utils';
+import { validateCalculatorInputs, sanitizeNumberInput, clampNumber, GERMAN_PENSION_LIMITS } from '@/lib/validation-utils';
 import { useToast } from '@/hooks/use-toast';
 import {
   Card,
@@ -165,8 +166,31 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
 
   const t = texts[language];
 
-  // Calculate pension
+  // Calculate pension with validation
   const calculatePension = () => {
+    // Get product type from active tab
+    const productTypeMap: Record<string, 'private' | 'riester' | 'ruerup' | 'occupational'> = {
+      'private-pension': 'private',
+      'riester': 'riester',
+      'ruerup': 'ruerup',
+      'occupational': 'occupational',
+    };
+    const productType = productTypeMap[activeTab] || 'private';
+
+    // Validate inputs
+    const errors = validateCalculatorInputs(inputs, productType, language);
+
+    if (errors.length > 0) {
+      // Show first error
+      const firstError = errors[0];
+      toast({
+        title: language === 'de' ? 'Eingabefehler' : 'Input Error',
+        description: firstError.error,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsCalculating(true);
     // Simulate calculation delay
     setTimeout(() => {
@@ -276,7 +300,8 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
     type = 'number',
     suffix,
     min = 0,
-    max
+    max,
+    showMinMax = true,
   }: {
     label: string;
     value: number;
@@ -285,36 +310,53 @@ export const PremiumCalculator: React.FC<PremiumCalculatorProps> = ({ language =
     suffix?: string;
     min?: number;
     max?: number;
-  }) => (
-    <div className="space-y-3">
-      <Label className="text-sm font-semibold text-foreground/90">{label}</Label>
-      <div className="relative">
-        <Input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          min={min}
-          max={max}
-          className="input-premium pr-12"
-        />
-        {suffix && (
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
-            {suffix}
-          </span>
+    showMinMax?: boolean;
+  }) => {
+    const handleInputChange = (val: string) => {
+      const sanitized = sanitizeNumberInput(val);
+      const clamped = max !== undefined ? clampNumber(sanitized, min, max) : Math.max(min, sanitized);
+      onChange(clamped);
+    };
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-semibold text-foreground/90">{label}</Label>
+          {showMinMax && max !== undefined && (
+            <span className="text-xs text-muted-foreground">
+              {min} - {max}
+            </span>
+          )}
+        </div>
+        <div className="relative">
+          <Input
+            type={type}
+            value={value}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onBlur={(e) => handleInputChange(e.target.value)}
+            min={min}
+            max={max}
+            className="input-premium pr-12"
+          />
+          {suffix && (
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+              {suffix}
+            </span>
+          )}
+        </div>
+        {(type === 'range' || max) && (
+          <Slider
+            value={[value]}
+            onValueChange={(vals) => onChange(vals[0])}
+            min={min}
+            max={max}
+            step={type === 'number' && suffix === '%' ? 0.1 : 1}
+            className="mt-2"
+          />
         )}
       </div>
-      {(type === 'range' || max) && (
-        <Slider
-          value={[value]}
-          onValueChange={(vals) => onChange(vals[0])}
-          min={min}
-          max={max}
-          step={1}
-          className="mt-2"
-        />
-      )}
-    </div>
-  );
+    );
+  };
 
   const ResultCard = ({
     icon: Icon,
